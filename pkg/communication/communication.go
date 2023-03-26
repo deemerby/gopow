@@ -2,7 +2,7 @@ package communication
 
 import (
 	"encoding/json"
-	"net"
+	"io"
 )
 
 // Type of message
@@ -21,7 +21,7 @@ type Message struct {
 	Payload string // payload
 }
 
-func SendMsg(msg *Message, conn net.Conn) error {
+func SendMsg(msg *Message, conn io.Writer) error {
 	msgByte, err := json.Marshal(msg)
 	if err != nil {
 		return err

@@ -52,7 +52,6 @@ func (c *MemoryStore) Get(key int) error {
 
 	if curTime.After(createdTime.Add(time.Second * time.Duration(value.Expiration))) {
 		return fmt.Errorf("value was expired")
-
 	}
 
 	return nil

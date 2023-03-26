@@ -1,7 +1,7 @@
 package pow
 
 import (
-	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
 	"strconv"
@@ -38,9 +38,9 @@ func (h HashcashData) createHeader() string {
 	return fmt.Sprintf("%d:%d:%s:%s:%s:%s:%d", h.Version, h.Bits, h.Date.Format(timeFormat), h.Resource, h.Extension, h.Rand, h.Counter)
 }
 
-// sha1Hash - calculates sha1 hash from given string
-func sha1Hash(data string) string {
-	h := sha1.New()
+// sha256Hash - calculates sha256 hash from given string
+func sha256Hash(data string) string {
+	h := sha256.New()
 	h.Write([]byte(data))
 
 	return fmt.Sprintf("%x", h.Sum(nil))
@@ -63,7 +63,7 @@ func IsHashValid(hash string, zerosCount int) bool {
 func (h HashcashData) CalculateHashcash(maxIterations int) (HashcashData, error) {
 	for h.Counter <= maxIterations || maxIterations <= 0 {
 		header := h.createHeader()
-		hash := sha1Hash(header)
+		hash := sha256Hash(header)
 		if IsHashValid(hash, h.Bits) {
 			return h, nil
 		}

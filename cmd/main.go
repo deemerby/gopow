@@ -66,5 +66,4 @@ func init() {
 	} else {
 		log.Printf("Serving from default values, environment variables, and/or flags")
 	}
-
 }

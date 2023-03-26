@@ -3,9 +3,10 @@ package server
 import (
 	"bufio"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"math/rand"
+	"math/big"
 	"net"
 
 	"github.com/sirupsen/logrus"
@@ -59,14 +60,14 @@ func (h *ServerHandler) HandleRequest(ctx context.Context, conn net.Conn) {
 		if res != nil {
 			err := cm.SendMsg(res, conn)
 			if err != nil {
-				h.log.Errorf("Failed to send message:", err)
+				h.log.Errorf("Failed to send message: %v", err)
 			}
 		}
 	}
 }
 
-// processRequest - Proccessing request from client
-func (h *ServerHandler) processRequest(ctx context.Context, req []byte, conn net.Conn) (*cm.Message, error) {
+// processRequest - Processing request from client
+func (h *ServerHandler) processRequest(_ context.Context, req []byte, conn net.Conn) (*cm.Message, error) {
 	msgReq := &cm.Message{}
 	clName := conn.RemoteAddr().String()
 	err := json.Unmarshal(req, msgReq)
@@ -79,13 +80,17 @@ func (h *ServerHandler) processRequest(ctx context.Context, req []byte, conn net
 	case cm.MsgRequest:
 		h.log.Infof("Client: %s requests challenge", clName)
 
-		rand := rand.Intn(viper.GetInt("max.random.number"))
-		h.log.Debugf("Add Rand: %d", rand)
-		if err := h.storage.Add(rand); err != nil {
+		nBig, err := rand.Int(rand.Reader, big.NewInt(viper.GetInt64("max.random.number")))
+		if err != nil {
+			panic(err)
+		}
+		rand := nBig.Int64()
+		h.log.Infof("Add Rand: %d", rand)
+		if err := h.storage.Add(int(rand)); err != nil {
 			return nil, fmt.Errorf("failed to add client date to storage: %v", err)
 		}
 
-		hashcash, err := pow.NewHashcash(clName, rand)
+		hashcash, err := pow.NewHashcash(clName, int(rand))
 		if err != nil {
 			return nil, fmt.Errorf("failed to get new hashcash: %v", err)
 		}
@@ -122,11 +127,16 @@ func (h *ServerHandler) processRequest(ctx context.Context, req []byte, conn net
 			return nil, fmt.Errorf("failed to check hashcash: %v", err)
 		}
 
-		//get random quote
+		// get random quote
 		h.log.Infof("Client: %s work confirmed", clName)
+		nBig, err := rand.Int(rand.Reader, big.NewInt(4))
+		if err != nil {
+			panic(err)
+		}
+		rand := nBig.Int64()
 		msgResult := &cm.Message{
 			Type:    cm.MsgQuote,
-			Payload: Quotes[rand.Intn(4)],
+			Payload: Quotes[int(rand)],
 		}
 
 		h.storage.Delete(randV)
