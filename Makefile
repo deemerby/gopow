@@ -34,9 +34,10 @@ endif
 .PHONY: push
 push: .push-$(IMAGE_NAME)-$(IMAGE_VERSION)
 
-.PHONY mod: 
+.PHONY vendor: 
 	@go mod tidy
 	@go mod download
+	@go mod vendor
 
 client: 
 	@go run ./cmd/ --type.server=false

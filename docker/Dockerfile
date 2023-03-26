@@ -3,7 +3,7 @@ FROM golang:1.19 AS builder
 ENV GO111MODULE=on
 WORKDIR /go/src/github.com/deemerby/gopow
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags "-s -w" -o bin/app ./cmd/
+RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -ldflags "-s -w" -o bin/app ./cmd/
 
 # copy the server binary from builder stage; run the server binary
 FROM alpine:latest AS runner
