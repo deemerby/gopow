@@ -13,8 +13,6 @@ const (
 	MsgQuote
 )
 
-const ByteDelim = byte(0x0A)
-
 // Message
 type Message struct {
 	Type    int    // type of message
@@ -26,7 +24,7 @@ func SendMsg(msg *Message, conn io.Writer) error {
 	if err != nil {
 		return err
 	}
-	msgByte = append(msgByte, ByteDelim)
+
 	_, err = conn.Write(msgByte)
 	return err
 }

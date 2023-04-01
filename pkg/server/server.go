@@ -1,14 +1,13 @@
 package server
 
 import (
-	"bufio"
 	"context"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/big"
 	"net"
-	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -45,17 +44,20 @@ func (h *ServerHandler) HandleRequest(ctx context.Context, conn net.Conn, opt *o
 	h.log.Infof("New client: %s", conn.RemoteAddr())
 	defer conn.Close()
 
-	conn.SetReadDeadline(time.Now().Add(time.Second * 2))
+	d := json.NewDecoder(conn)
+	msg := &cm.Message{}
 
-	reader := bufio.NewReader(conn)
 	for {
-		req, err := reader.ReadBytes(cm.ByteDelim)
+		err := d.Decode(msg)
 		if err != nil {
+			if err == io.EOF {
+				return
+			}
 			h.log.Infof("Failed to read request: %v", err)
 			return
 		}
 
-		res, err := h.processRequest(ctx, req, conn, opt)
+		res, err := h.processRequest(ctx, msg, conn, opt)
 		if err != nil {
 			h.log.Errorf("Failed to process request error: %v", err)
 			return
@@ -70,13 +72,8 @@ func (h *ServerHandler) HandleRequest(ctx context.Context, conn net.Conn, opt *o
 }
 
 // processRequest - Processing request from client
-func (h *ServerHandler) processRequest(_ context.Context, req []byte, conn net.Conn, opt *options.AppOptions) (*cm.Message, error) {
-	msgReq := &cm.Message{}
+func (h *ServerHandler) processRequest(_ context.Context, msgReq *cm.Message, conn net.Conn, opt *options.AppOptions) (*cm.Message, error) {
 	clName := conn.RemoteAddr().String()
-	err := json.Unmarshal(req, msgReq)
-	if err != nil {
-		return nil, err
-	}
 
 	// check type of message
 	switch msgReq.Type {
@@ -85,7 +82,7 @@ func (h *ServerHandler) processRequest(_ context.Context, req []byte, conn net.C
 
 		nBig, err := rand.Int(rand.Reader, big.NewInt(opt.MaxNumber))
 		if err != nil {
-			panic(err)
+			return nil, fmt.Errorf("failed to get random value: %v", err)
 		}
 		rand := nBig.Int64()
 		h.log.Infof("Add Rand: %d", rand)
@@ -116,6 +113,7 @@ func (h *ServerHandler) processRequest(_ context.Context, req []byte, conn net.C
 		}
 
 		var randV int
+		var err error
 		if randV, err = hashcash.GetRand(); err != nil {
 			return nil, err
 		}
