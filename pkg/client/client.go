@@ -7,14 +7,15 @@ import (
 	"fmt"
 	"net"
 
-	cm "github.com/deemerby/gopow/pkg/communication"
-	"github.com/deemerby/gopow/pkg/pow"
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
+
+	cm "github.com/deemerby/gopow/pkg/communication"
+	"github.com/deemerby/gopow/pkg/options"
+	"github.com/deemerby/gopow/pkg/pow"
 )
 
 // HandleRequest - handle server response
-func HandleResponse(ctx context.Context, logger *logrus.Logger, conn net.Conn) (string, error) {
+func HandleResponse(ctx context.Context, logger *logrus.Logger, conn net.Conn, opt *options.AppOptions) (string, error) {
 	logger.Infof("Client is able to connect to server: %s", conn.RemoteAddr())
 	defer conn.Close()
 
@@ -48,7 +49,7 @@ func HandleResponse(ctx context.Context, logger *logrus.Logger, conn net.Conn) (
 	}
 	logger.Debugf("hashcash response: %+v", hashcashRes)
 
-	hashcashResult, err := hashcashRes.CalculateHashcash(viper.GetInt("hashcash.max.iteration"))
+	hashcashResult, err := hashcashRes.CalculateHashcash(opt.MaxIteration)
 	if err != nil {
 		return "", err
 	}

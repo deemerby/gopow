@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"strconv"
 	"time"
-
-	"github.com/spf13/viper"
 )
 
 const (
@@ -75,14 +73,14 @@ func (h HashcashData) CalculateHashcash(maxIterations int) (HashcashData, error)
 }
 
 // NewHashcash creates a new Hashcash
-func NewHashcash(resource string, rand int) (*HashcashData, error) {
+func NewHashcash(resource string, rand int, zeroCnt int) (*HashcashData, error) {
 	if resource == "" {
 		return nil, fmt.Errorf("resource is empty")
 	}
 
 	return &HashcashData{
 		Version:  1,
-		Bits:     viper.GetInt("hashcash.zero.cnt"),
+		Bits:     zeroCnt,
 		Date:     time.Now().UTC().UTC(),
 		Resource: resource,
 		Rand:     base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%d", rand))),

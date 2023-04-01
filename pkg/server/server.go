@@ -8,11 +8,12 @@ import (
 	"fmt"
 	"math/big"
 	"net"
+	"time"
 
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
 
 	cm "github.com/deemerby/gopow/pkg/communication"
+	"github.com/deemerby/gopow/pkg/options"
 	"github.com/deemerby/gopow/pkg/pow"
 	st "github.com/deemerby/gopow/pkg/storage"
 )
@@ -40,9 +41,11 @@ func NewHandler(logger *logrus.Logger, storage *st.MemoryStore) *ServerHandler {
 }
 
 // HandleRequest - handle client request
-func (h *ServerHandler) HandleRequest(ctx context.Context, conn net.Conn) {
+func (h *ServerHandler) HandleRequest(ctx context.Context, conn net.Conn, opt *options.AppOptions) {
 	h.log.Infof("New client: %s", conn.RemoteAddr())
 	defer conn.Close()
+
+	conn.SetReadDeadline(time.Now().Add(time.Second * 2))
 
 	reader := bufio.NewReader(conn)
 	for {
@@ -52,7 +55,7 @@ func (h *ServerHandler) HandleRequest(ctx context.Context, conn net.Conn) {
 			return
 		}
 
-		res, err := h.processRequest(ctx, req, conn)
+		res, err := h.processRequest(ctx, req, conn, opt)
 		if err != nil {
 			h.log.Errorf("Failed to process request error: %v", err)
 			return
@@ -67,7 +70,7 @@ func (h *ServerHandler) HandleRequest(ctx context.Context, conn net.Conn) {
 }
 
 // processRequest - Processing request from client
-func (h *ServerHandler) processRequest(_ context.Context, req []byte, conn net.Conn) (*cm.Message, error) {
+func (h *ServerHandler) processRequest(_ context.Context, req []byte, conn net.Conn, opt *options.AppOptions) (*cm.Message, error) {
 	msgReq := &cm.Message{}
 	clName := conn.RemoteAddr().String()
 	err := json.Unmarshal(req, msgReq)
@@ -80,7 +83,7 @@ func (h *ServerHandler) processRequest(_ context.Context, req []byte, conn net.C
 	case cm.MsgRequest:
 		h.log.Infof("Client: %s requests challenge", clName)
 
-		nBig, err := rand.Int(rand.Reader, big.NewInt(viper.GetInt64("max.random.number")))
+		nBig, err := rand.Int(rand.Reader, big.NewInt(opt.MaxNumber))
 		if err != nil {
 			panic(err)
 		}
@@ -90,7 +93,7 @@ func (h *ServerHandler) processRequest(_ context.Context, req []byte, conn net.C
 			return nil, fmt.Errorf("failed to add client date to storage: %v", err)
 		}
 
-		hashcash, err := pow.NewHashcash(clName, int(rand))
+		hashcash, err := pow.NewHashcash(clName, int(rand), opt.ZeroCnt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get new hashcash: %v", err)
 		}

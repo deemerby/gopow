@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/deemerby/gopow/pkg/client"
+	"github.com/deemerby/gopow/pkg/options"
 	"github.com/deemerby/gopow/pkg/server"
 	st "github.com/deemerby/gopow/pkg/storage"
 	"github.com/sirupsen/logrus"
@@ -23,12 +24,18 @@ func main() {
 	_ = globalCtx
 	logger.Infof("Version: %v", version)
 
+	opt := &options.AppOptions{
+		ZeroCnt:      viper.GetInt("hashcash.zero.cnt"),
+		MaxIteration: viper.GetInt("hashcash.max.iteration"),
+		MaxNumber:    viper.GetInt64("max.random.number"),
+	}
+
 	if viper.GetBool("type.server") {
 		logger.Info("Server")
-		go func() { doneC <- RunServer(globalCtx, logger) }()
+		go func() { doneC <- RunServer(globalCtx, logger, opt) }()
 	} else {
 		logger.Info("Client")
-		go func() { doneC <- RunClient(globalCtx, logger) }()
+		go func() { doneC <- RunClient(globalCtx, logger, opt) }()
 	}
 
 	if err := <-doneC; err != nil {
@@ -73,7 +80,7 @@ func init() {
 }
 
 // RunServer ...
-func RunServer(ctx context.Context, logger *logrus.Logger) error {
+func RunServer(ctx context.Context, logger *logrus.Logger, opt *options.AppOptions) error {
 	listener, err := net.Listen("tcp", net.JoinHostPort(viper.GetString("server.address"), viper.GetString("server.port")))
 	if err != nil {
 		return err
@@ -81,8 +88,9 @@ func RunServer(ctx context.Context, logger *logrus.Logger) error {
 	defer listener.Close()
 
 	logger.Infof("Server is listening... port: %s", viper.GetString("server.port"))
-	storage := st.NewMemoryStore()
+	storage := st.NewMemoryStore(viper.GetInt("hashcash.duration"))
 	ser := server.NewHandler(logger, storage)
+
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -91,19 +99,19 @@ func RunServer(ctx context.Context, logger *logrus.Logger) error {
 		defer conn.Close()
 
 		go func() {
-			ser.HandleRequest(ctx, conn)
+			ser.HandleRequest(ctx, conn, opt)
 		}()
 	}
 }
 
 // RunClient ...
-func RunClient(ctx context.Context, logger *logrus.Logger) error {
+func RunClient(ctx context.Context, logger *logrus.Logger, opt *options.AppOptions) error {
 	conn, err := net.Dial("tcp", net.JoinHostPort(viper.GetString("server.address"), viper.GetString("server.port")))
 	if err != nil {
 		return err
 	}
 
-	msg, err := client.HandleResponse(ctx, logger, conn)
+	msg, err := client.HandleResponse(ctx, logger, conn, opt)
 	if err != nil {
 		return err
 	}

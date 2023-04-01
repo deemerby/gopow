@@ -15,7 +15,7 @@ const (
 
 	defaultLoggingLevel = "info"
 
-	defaultHashcashZeroCnt       = 5
+	defaultHashcashZeroCnt       = 6
 	defaultHashcashDuration      = 20
 	defaultHashcashMaxIterations = 1000000000
 

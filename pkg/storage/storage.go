@@ -4,13 +4,12 @@ import (
 	"fmt"
 	"sync"
 	"time"
-
-	"github.com/spf13/viper"
 )
 
 type MemoryStore struct {
-	dataMap map[int]Data
-	mx      sync.RWMutex
+	dataMap  map[int]Data
+	mx       sync.RWMutex
+	duration int
 }
 
 // Data
@@ -18,9 +17,10 @@ type Data struct {
 	ExpiratioTime time.Time
 }
 
-func NewMemoryStore() *MemoryStore {
+func NewMemoryStore(duration int) *MemoryStore {
 	return &MemoryStore{
-		dataMap: make(map[int]Data, 0),
+		dataMap:  make(map[int]Data, 0),
+		duration: duration,
 	}
 }
 
@@ -30,7 +30,7 @@ func (c *MemoryStore) Add(key int) error {
 	defer c.mx.Unlock()
 
 	c.dataMap[key] = Data{
-		ExpiratioTime: time.Now().UTC().Add(time.Second * time.Duration(viper.GetInt("hashcash.duration"))),
+		ExpiratioTime: time.Now().UTC().Add(time.Second * time.Duration(c.duration)),
 	}
 	return nil
 }
