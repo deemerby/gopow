@@ -114,7 +114,7 @@ func RunServer(ctx context.Context, logger *logrus.Logger, opt *options.AppOptio
 	}()
 
 	logger.Infof("Server is listening... port: %s", viper.GetString("server.port"))
-	storage := st.NewMemoryStore(viper.GetInt("hashcash.duration"))
+	storage := st.NewMemoryStore(ctx, viper.GetDuration("hashcash.duration"))
 	ser := server.NewHandler(logger, storage)
 
 	for {
