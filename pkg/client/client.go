@@ -1,7 +1,6 @@
 package client
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -14,7 +13,7 @@ import (
 )
 
 // HandleRequest - handle server response
-func HandleResponse(ctx context.Context, logger *logrus.Logger, conn net.Conn, opt *options.AppOptions) (string, error) {
+func HandleResponse(logger *logrus.Logger, conn net.Conn, opt *options.AppOptions) (string, error) {
 	logger.Infof("Client is able to connect to server: %s", conn.RemoteAddr())
 	defer conn.Close()
 

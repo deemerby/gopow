@@ -57,7 +57,7 @@ func (h *ServerHandler) HandleRequest(ctx context.Context, conn net.Conn, opt *o
 			return
 		}
 
-		res, err := h.processRequest(ctx, msg, conn, opt)
+		res, err := h.processRequest(msg, conn, opt)
 		if err != nil {
 			h.log.Errorf("Failed to process request error: %v", err)
 			return
@@ -68,11 +68,17 @@ func (h *ServerHandler) HandleRequest(ctx context.Context, conn net.Conn, opt *o
 				h.log.Errorf("Failed to send message: %v", err)
 			}
 		}
+
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
 	}
 }
 
 // processRequest - Processing request from client
-func (h *ServerHandler) processRequest(_ context.Context, msgReq *cm.Message, conn net.Conn, opt *options.AppOptions) (*cm.Message, error) {
+func (h *ServerHandler) processRequest(msgReq *cm.Message, conn net.Conn, opt *options.AppOptions) (*cm.Message, error) {
 	clName := conn.RemoteAddr().String()
 
 	// check type of message

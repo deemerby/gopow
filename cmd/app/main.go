@@ -4,7 +4,11 @@ import (
 	"context"
 	"log"
 	"net"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/deemerby/gopow/pkg/client"
 	"github.com/deemerby/gopow/pkg/options"
@@ -21,13 +25,20 @@ func main() {
 	doneC := make(chan error)
 	logger := NewLogger()
 	globalCtx, globalCancel := context.WithCancel(context.Background())
-	_ = globalCtx
+	sigc := make(chan os.Signal, 1)
+	signal.Notify(sigc,
+		syscall.SIGHUP,
+		syscall.SIGINT,
+		syscall.SIGTERM,
+		syscall.SIGQUIT)
+
 	logger.Infof("Version: %v", version)
 
 	opt := &options.AppOptions{
 		ZeroCnt:      viper.GetInt("hashcash.zero.cnt"),
 		MaxIteration: viper.GetInt("hashcash.max.iteration"),
 		MaxNumber:    viper.GetInt64("max.random.number"),
+		ConDeadline:  viper.GetDuration("connection.deadline"),
 	}
 
 	if viper.GetBool("type.server") {
@@ -38,7 +49,15 @@ func main() {
 		go func() { doneC <- RunClient(globalCtx, logger, opt) }()
 	}
 
-	if err := <-doneC; err != nil {
+	select {
+	case err := <-doneC:
+		globalCancel()
+		if err != nil {
+			logger.Fatal(err)
+		}
+
+		os.Exit(0)
+	case err := <-sigc:
 		globalCancel()
 		logger.Fatal(err)
 	}
@@ -85,7 +104,14 @@ func RunServer(ctx context.Context, logger *logrus.Logger, opt *options.AppOptio
 	if err != nil {
 		return err
 	}
-	defer listener.Close()
+
+	go func() {
+		<-ctx.Done()
+
+		if err := listener.Close(); err != nil {
+			logger.Errorf("Failed to close listener: %v", err)
+		}
+	}()
 
 	logger.Infof("Server is listening... port: %s", viper.GetString("server.port"))
 	storage := st.NewMemoryStore(viper.GetInt("hashcash.duration"))
@@ -96,6 +122,7 @@ func RunServer(ctx context.Context, logger *logrus.Logger, opt *options.AppOptio
 		if err != nil {
 			return err
 		}
+		_ = conn.SetDeadline(time.Now().Add(opt.ConDeadline))
 		defer conn.Close()
 
 		go func() {
@@ -111,7 +138,15 @@ func RunClient(ctx context.Context, logger *logrus.Logger, opt *options.AppOptio
 		return err
 	}
 
-	msg, err := client.HandleResponse(ctx, logger, conn, opt)
+	go func() {
+		<-ctx.Done()
+
+		if err := conn.Close(); err != nil {
+			logger.Errorf("Failed to close connection: %v", err)
+		}
+	}()
+
+	msg, err := client.HandleResponse(logger, conn, opt)
 	if err != nil {
 		return err
 	}
