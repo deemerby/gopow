@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -9,7 +10,7 @@ import (
 type MemoryStore struct {
 	dataMap  map[int]Data
 	mx       sync.RWMutex
-	duration int
+	duration time.Duration
 }
 
 // Data
@@ -17,11 +18,14 @@ type Data struct {
 	ExpiratioTime time.Time
 }
 
-func NewMemoryStore(duration int) *MemoryStore {
-	return &MemoryStore{
+func NewMemoryStore(ctx context.Context, duration time.Duration) *MemoryStore {
+	ms := &MemoryStore{
 		dataMap:  make(map[int]Data, 0),
 		duration: duration,
 	}
+	go ms.Watcher(ctx)
+
+	return ms
 }
 
 // Add - add rand client data to mememory
@@ -30,7 +34,7 @@ func (c *MemoryStore) Add(key int) error {
 	defer c.mx.Unlock()
 
 	c.dataMap[key] = Data{
-		ExpiratioTime: time.Now().UTC().Add(time.Second * time.Duration(c.duration)),
+		ExpiratioTime: time.Now().UTC().Add(c.duration),
 	}
 	return nil
 }
@@ -42,7 +46,7 @@ func (c *MemoryStore) Get(key int) error {
 	value, ok := c.dataMap[key]
 
 	if !ok {
-		return fmt.Errorf("required values not found")
+		return fmt.Errorf("required value was not found or was automatically deleted after expiration")
 	}
 
 	curTime := time.Now().UTC()
@@ -59,4 +63,24 @@ func (c *MemoryStore) Delete(key int) {
 	c.mx.Lock()
 	defer c.mx.Unlock()
 	delete(c.dataMap, key)
+}
+
+// Add - add rand client data to mememory
+func (c *MemoryStore) Watcher(ctx context.Context) {
+	for {
+		c.mx.Lock()
+		curTime := time.Now().UTC()
+		for k, v := range c.dataMap {
+			if curTime.After(v.ExpiratioTime) {
+				delete(c.dataMap, k)
+			}
+		}
+		c.mx.Unlock()
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(c.duration * 2):
+		}
+	}
 }

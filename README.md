@@ -139,6 +139,7 @@ Here's the full set of flags for application.
 | `hashcash.duration`       | maximum period after which the request will be considered expired(sec)  | No            | `"20"`                |
 | `hashcash.max.iteration`  | the maximum iteration to calulate haskcash                              | No            | `"1000000000"`        |
 | `max.random.number`       | the maximum random number in the given range                            | No            | `"100000"`            |
+| `connection.deadline`     | sets the read and write deadlines associated with the connection.       | No            | `"40"`                |
 | `logging.level`           | log level of application                                                | No            | `"info"`              |
 
 Possible log levels: `"panic"`, `"fatal"`, `"error"`, `"warn"`, `"warning"`, `"info"`, `"debug"`, `"trace"`

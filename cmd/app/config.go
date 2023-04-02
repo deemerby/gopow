@@ -18,7 +18,7 @@ const (
 	defaultLoggingLevel = "info"
 
 	defaultHashcashZeroCnt       = 4
-	defaultHashcashDuration      = 30
+	defaultHashcashDuration      = time.Second * 30
 	defaultHashcashMaxIterations = 1000000000
 	defaultConnectionDeadLine    = time.Second * 40
 
@@ -35,7 +35,7 @@ var (
 	_ = pflag.Bool("type.server", defaulTypeServer, "type of application")
 
 	_ = pflag.Int("hashcash.zero.cnt", defaultHashcashZeroCnt, "hashcash zero count")
-	_ = pflag.Int("hashcash.duration", defaultHashcashDuration, "hashcash duration")
+	_ = pflag.Duration("hashcash.duration", defaultHashcashDuration, "hashcash duration")
 	_ = pflag.Int("hashcash.max.iteration", defaultHashcashMaxIterations, "hashcash maximum iteration")
 
 	_ = pflag.Int("max.random.number", defaultRand, "maximum random number")
