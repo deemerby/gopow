@@ -1,6 +1,8 @@
 package main
 
 import (
+	"time"
+
 	"github.com/spf13/pflag"
 )
 
@@ -15,9 +17,10 @@ const (
 
 	defaultLoggingLevel = "info"
 
-	defaultHashcashZeroCnt       = 5
-	defaultHashcashDuration      = 20
+	defaultHashcashZeroCnt       = 4
+	defaultHashcashDuration      = 30
 	defaultHashcashMaxIterations = 1000000000
+	defaultConnectionDeadLine    = time.Second * 40
 
 	defaultRand = 100000
 )
@@ -36,4 +39,6 @@ var (
 	_ = pflag.Int("hashcash.max.iteration", defaultHashcashMaxIterations, "hashcash maximum iteration")
 
 	_ = pflag.Int("max.random.number", defaultRand, "maximum random number")
+
+	_ = pflag.Duration("connection.deadline", defaultConnectionDeadLine, "connection deadline")
 )

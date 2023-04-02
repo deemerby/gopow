@@ -1,18 +1,18 @@
 package server
 
 import (
-	"bufio"
 	"context"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/big"
 	"net"
 
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
 
 	cm "github.com/deemerby/gopow/pkg/communication"
+	"github.com/deemerby/gopow/pkg/options"
 	"github.com/deemerby/gopow/pkg/pow"
 	st "github.com/deemerby/gopow/pkg/storage"
 )
@@ -40,19 +40,24 @@ func NewHandler(logger *logrus.Logger, storage *st.MemoryStore) *ServerHandler {
 }
 
 // HandleRequest - handle client request
-func (h *ServerHandler) HandleRequest(ctx context.Context, conn net.Conn) {
+func (h *ServerHandler) HandleRequest(ctx context.Context, conn net.Conn, opt *options.AppOptions) {
 	h.log.Infof("New client: %s", conn.RemoteAddr())
 	defer conn.Close()
 
-	reader := bufio.NewReader(conn)
+	d := json.NewDecoder(conn)
+	msg := &cm.Message{}
+
 	for {
-		req, err := reader.ReadBytes(cm.ByteDelim)
+		err := d.Decode(msg)
 		if err != nil {
+			if err == io.EOF {
+				return
+			}
 			h.log.Infof("Failed to read request: %v", err)
 			return
 		}
 
-		res, err := h.processRequest(ctx, req, conn)
+		res, err := h.processRequest(msg, conn, opt)
 		if err != nil {
 			h.log.Errorf("Failed to process request error: %v", err)
 			return
@@ -63,26 +68,27 @@ func (h *ServerHandler) HandleRequest(ctx context.Context, conn net.Conn) {
 				h.log.Errorf("Failed to send message: %v", err)
 			}
 		}
+
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
 	}
 }
 
 // processRequest - Processing request from client
-func (h *ServerHandler) processRequest(_ context.Context, req []byte, conn net.Conn) (*cm.Message, error) {
-	msgReq := &cm.Message{}
+func (h *ServerHandler) processRequest(msgReq *cm.Message, conn net.Conn, opt *options.AppOptions) (*cm.Message, error) {
 	clName := conn.RemoteAddr().String()
-	err := json.Unmarshal(req, msgReq)
-	if err != nil {
-		return nil, err
-	}
 
 	// check type of message
 	switch msgReq.Type {
 	case cm.MsgRequest:
 		h.log.Infof("Client: %s requests challenge", clName)
 
-		nBig, err := rand.Int(rand.Reader, big.NewInt(viper.GetInt64("max.random.number")))
+		nBig, err := rand.Int(rand.Reader, big.NewInt(opt.MaxNumber))
 		if err != nil {
-			panic(err)
+			return nil, fmt.Errorf("failed to get random value: %v", err)
 		}
 		rand := nBig.Int64()
 		h.log.Infof("Add Rand: %d", rand)
@@ -90,7 +96,7 @@ func (h *ServerHandler) processRequest(_ context.Context, req []byte, conn net.C
 			return nil, fmt.Errorf("failed to add client date to storage: %v", err)
 		}
 
-		hashcash, err := pow.NewHashcash(clName, int(rand))
+		hashcash, err := pow.NewHashcash(clName, int(rand), opt.ZeroCnt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get new hashcash: %v", err)
 		}
@@ -113,6 +119,7 @@ func (h *ServerHandler) processRequest(_ context.Context, req []byte, conn net.C
 		}
 
 		var randV int
+		var err error
 		if randV, err = hashcash.GetRand(); err != nil {
 			return nil, err
 		}

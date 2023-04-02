@@ -4,9 +4,14 @@ import (
 	"context"
 	"log"
 	"net"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/deemerby/gopow/pkg/client"
+	"github.com/deemerby/gopow/pkg/options"
 	"github.com/deemerby/gopow/pkg/server"
 	st "github.com/deemerby/gopow/pkg/storage"
 	"github.com/sirupsen/logrus"
@@ -20,18 +25,39 @@ func main() {
 	doneC := make(chan error)
 	logger := NewLogger()
 	globalCtx, globalCancel := context.WithCancel(context.Background())
-	_ = globalCtx
+	sigc := make(chan os.Signal, 1)
+	signal.Notify(sigc,
+		syscall.SIGHUP,
+		syscall.SIGINT,
+		syscall.SIGTERM,
+		syscall.SIGQUIT)
+
 	logger.Infof("Version: %v", version)
+
+	opt := &options.AppOptions{
+		ZeroCnt:      viper.GetInt("hashcash.zero.cnt"),
+		MaxIteration: viper.GetInt("hashcash.max.iteration"),
+		MaxNumber:    viper.GetInt64("max.random.number"),
+		ConDeadline:  viper.GetDuration("connection.deadline"),
+	}
 
 	if viper.GetBool("type.server") {
 		logger.Info("Server")
-		go func() { doneC <- RunServer(globalCtx, logger) }()
+		go func() { doneC <- RunServer(globalCtx, logger, opt) }()
 	} else {
 		logger.Info("Client")
-		go func() { doneC <- RunClient(globalCtx, logger) }()
+		go func() { doneC <- RunClient(globalCtx, logger, opt) }()
 	}
 
-	if err := <-doneC; err != nil {
+	select {
+	case err := <-doneC:
+		globalCancel()
+		if err != nil {
+			logger.Fatal(err)
+		}
+
+		os.Exit(0)
+	case err := <-sigc:
 		globalCancel()
 		logger.Fatal(err)
 	}
@@ -73,37 +99,54 @@ func init() {
 }
 
 // RunServer ...
-func RunServer(ctx context.Context, logger *logrus.Logger) error {
+func RunServer(ctx context.Context, logger *logrus.Logger, opt *options.AppOptions) error {
 	listener, err := net.Listen("tcp", net.JoinHostPort(viper.GetString("server.address"), viper.GetString("server.port")))
 	if err != nil {
 		return err
 	}
-	defer listener.Close()
+
+	go func() {
+		<-ctx.Done()
+
+		if err := listener.Close(); err != nil {
+			logger.Errorf("Failed to close listener: %v", err)
+		}
+	}()
 
 	logger.Infof("Server is listening... port: %s", viper.GetString("server.port"))
-	storage := st.NewMemoryStore()
+	storage := st.NewMemoryStore(viper.GetInt("hashcash.duration"))
 	ser := server.NewHandler(logger, storage)
+
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
 			return err
 		}
+		_ = conn.SetDeadline(time.Now().Add(opt.ConDeadline))
 		defer conn.Close()
 
 		go func() {
-			ser.HandleRequest(ctx, conn)
+			ser.HandleRequest(ctx, conn, opt)
 		}()
 	}
 }
 
 // RunClient ...
-func RunClient(ctx context.Context, logger *logrus.Logger) error {
+func RunClient(ctx context.Context, logger *logrus.Logger, opt *options.AppOptions) error {
 	conn, err := net.Dial("tcp", net.JoinHostPort(viper.GetString("server.address"), viper.GetString("server.port")))
 	if err != nil {
 		return err
 	}
 
-	msg, err := client.HandleResponse(ctx, logger, conn)
+	go func() {
+		<-ctx.Done()
+
+		if err := conn.Close(); err != nil {
+			logger.Errorf("Failed to close connection: %v", err)
+		}
+	}()
+
+	msg, err := client.HandleResponse(logger, conn, opt)
 	if err != nil {
 		return err
 	}

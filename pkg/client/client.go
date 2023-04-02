@@ -1,54 +1,47 @@
 package client
 
 import (
-	"bufio"
-	"context"
 	"encoding/json"
 	"fmt"
 	"net"
 
-	cm "github.com/deemerby/gopow/pkg/communication"
-	"github.com/deemerby/gopow/pkg/pow"
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
+
+	cm "github.com/deemerby/gopow/pkg/communication"
+	"github.com/deemerby/gopow/pkg/options"
+	"github.com/deemerby/gopow/pkg/pow"
 )
 
 // HandleRequest - handle server response
-func HandleResponse(ctx context.Context, logger *logrus.Logger, conn net.Conn) (string, error) {
+func HandleResponse(logger *logrus.Logger, conn net.Conn, opt *options.AppOptions) (string, error) {
 	logger.Infof("Client is able to connect to server: %s", conn.RemoteAddr())
 	defer conn.Close()
 
 	// send request to get challenge
-	response := &cm.Message{Type: cm.MsgRequest}
-	if err := cm.SendMsg(response, conn); err != nil {
+	msg := &cm.Message{Type: cm.MsgRequest}
+	if err := cm.SendMsg(msg, conn); err != nil {
 		return "", fmt.Errorf("failed to send message: %v", err)
 	}
 
-	reader := bufio.NewReader(conn)
-	res, err := reader.ReadBytes(cm.ByteDelim)
-	if err != nil {
+	d := json.NewDecoder(conn)
+	if err := d.Decode(msg); err != nil {
 		return "", fmt.Errorf("failed to read response error: %v", err)
 	}
 
-	// unmarshal challenge response
-	err = json.Unmarshal(res, response)
-	if err != nil {
-		return "", err
-	}
-	if response.Type != cm.MsgChallenge {
-		return "", fmt.Errorf("got wrong message type: %v", err)
+	if msg.Type != cm.MsgChallenge {
+		return "", fmt.Errorf("got wrong message type: %d", msg.Type)
 	}
 	logger.Debugln("process challenge response")
 
 	// calculate result
 	logger.Debugln("calculate result")
 	hashcashRes := &pow.HashcashData{}
-	if err = json.Unmarshal([]byte(response.Payload), hashcashRes); err != nil {
-		return "", err
+	if err := json.Unmarshal([]byte(msg.Payload), hashcashRes); err != nil {
+		return "", fmt.Errorf("failed to unmarshal payload error: %v", err)
 	}
 	logger.Debugf("hashcash response: %+v", hashcashRes)
 
-	hashcashResult, err := hashcashRes.CalculateHashcash(viper.GetInt("hashcash.max.iteration"))
+	hashcashResult, err := hashcashRes.CalculateHashcash(opt.MaxIteration)
 	if err != nil {
 		return "", err
 	}
@@ -69,19 +62,14 @@ func HandleResponse(ctx context.Context, logger *logrus.Logger, conn net.Conn) (
 	}
 
 	// process quote
-	resQuote, err := reader.ReadBytes(cm.ByteDelim)
-	if err != nil {
+	if err := d.Decode(msg); err != nil {
 		return "", fmt.Errorf("failed to read response error: %v", err)
 	}
 
-	err = json.Unmarshal(resQuote, response)
-	if err != nil {
-		return "", err
-	}
-	if response.Type != cm.MsgQuote {
-		return "", fmt.Errorf("got wrong message type: %v", err)
+	if msg.Type != cm.MsgQuote {
+		return "", fmt.Errorf("got wrong message type: %d", msg.Type)
 	}
 	logger.Debugln("process quote response")
 
-	return response.Payload, nil
+	return msg.Payload, nil
 }
