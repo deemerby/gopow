@@ -100,7 +100,10 @@ func init() {
 
 // RunServer ...
 func RunServer(ctx context.Context, logger *logrus.Logger, opt *options.AppOptions) error {
-	listener, err := net.Listen("tcp", net.JoinHostPort(viper.GetString("server.address"), viper.GetString("server.port")))
+	lConf := net.ListenConfig{
+		KeepAlive: opt.ConDeadline / 2,
+	}
+	listener, err := lConf.Listen(ctx, "tcp", net.JoinHostPort(viper.GetString("server.address"), viper.GetString("server.port")))
 	if err != nil {
 		return err
 	}
